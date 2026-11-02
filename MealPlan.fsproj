@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <UserSecretsId>dotnet-MealPlan-75f394b7-820c-4d99-99f0-404417395caa</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Models.fs" />
+    <Compile Include="Worker.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0-preview.6.25358.103" />
+  </ItemGroup>
+</Project>
