@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="MealPlan.Core/MealPlan.Core.fsproj" />
+  <Project Path="MealPlan.Host/MealPlan.Host.csproj" />
+</Solution>

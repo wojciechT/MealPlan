@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Models.fs" />
+    <Compile Include="Data\DbModels.fs" />
+    <Compile Include="Data\IRepository.fs" />
+
+    <Compile Include="Data\RecipeRepository.fs" />
+    <Compile Include="Data\PlanRepository.fs" />
+    <Compile Include="Data\IngredientRepository.fs" />
+
+    <Compile Include="Data\Sqlite.fs" />
+    <Compile Include="Data\SqliteRecipeRepository.fs" />
+    <Compile Include="Data\SqlitePlanRepository.fs" />
+    <Compile Include="Data\SqliteIngredientRepository.fs" />
+
+    <Compile Include="Data\Mapping.fs" />
+
+    <Compile Include="Plans.fs" />
+    <Compile Include="RecipeService.fs" />
+    <Compile Include="Ingredients.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+  </ItemGroup>
+
+</Project>
