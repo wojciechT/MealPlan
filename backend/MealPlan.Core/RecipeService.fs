@@ -1,9 +1,6 @@
 namespace MealPlan.Core
 
 open System
-open System.Collections.Concurrent
-open System.Threading
-open System.Threading.Tasks
 
 type AddRecipeError =
     | BlankName
@@ -31,22 +28,6 @@ module AddRecipeError =
         | DuplicateIngredient name -> $"Ingredient '%s{name}' is listed more than once."
         | BlankTag -> "A tag is empty."
         | BlankReference -> "The reference is present but empty."
-
-/// In-memory store, stands in until there is somewhere real to persist to.
-/// Hand `store.Save` to `RecipeService.add`.
-type InMemoryRecipeStore() =
-    let recipes = ConcurrentDictionary<Guid, Recipe>()
-
-    member _.Save (recipe: Recipe) (_: CancellationToken) =
-        recipes[recipe.Id] <- recipe
-        Task.CompletedTask
-
-    member _.TryGet(id: Guid) =
-        match recipes.TryGetValue id with
-        | true, recipe -> Some recipe
-        | _ -> None
-
-    member _.All() = recipes.Values |> List.ofSeq
 
 module RecipeService =
 
@@ -129,19 +110,3 @@ module RecipeService =
                   Tags = tags
                   Reference = reference }
         | errors -> Error errors
-
-    /// Validates a recipe and hands the normalised version to `save`,
-    /// returning the recipe as it was stored.
-    let add
-        (newId: unit -> Guid)
-        (save: Recipe -> CancellationToken -> Task)
-        (recipe: Recipe)
-        (ct: CancellationToken)
-        : Task<Result<Recipe, AddRecipeError list>> =
-        task {
-            match validate newId recipe with
-            | Error errors -> return Error errors
-            | Ok normalised ->
-                do! save normalised ct
-                return Ok normalised
-        }

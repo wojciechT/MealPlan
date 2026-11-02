@@ -1,0 +1,21 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-surface: oklch(99% 0.004 95);
+  --color-surface-sunken: oklch(96.5% 0.006 95);
+  --color-line: oklch(90% 0.008 95);
+  --color-ink: oklch(25% 0.015 60);
+  --color-ink-soft: oklch(52% 0.012 60);
+  --color-accent: oklch(55% 0.13 145);
+  --color-accent-soft: oklch(95% 0.03 145);
+  --color-danger: oklch(55% 0.17 25);
+  --color-danger-soft: oklch(96% 0.03 25);
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-surface text-ink antialiased;
+}

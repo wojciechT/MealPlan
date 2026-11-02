@@ -1,0 +1,127 @@
+@host = http://localhost:5106/api
+
+### Ingredients ###########################################################
+
+GET {{host}}/ingredients
+Accept: application/json
+
+###
+
+# @name addTomato
+POST {{host}}/ingredients
+Content-Type: application/json
+
+{ "name": "Tomato", "category": "Vegetables" }
+
+###
+
+# @name addPasta
+POST {{host}}/ingredients
+Content-Type: application/json
+
+{ "name": "Pasta", "category": "Dry goods" }
+
+###
+
+@tomatoId = {{addTomato.response.body.id}}
+@pastaId = {{addPasta.response.body.id}}
+
+GET {{host}}/ingredients/{{tomatoId}}
+Accept: application/json
+
+###
+
+PUT {{host}}/ingredients/{{tomatoId}}
+Content-Type: application/json
+
+{ "name": "Cherry tomato", "category": "Vegetables" }
+
+### Recipes ###############################################################
+
+# @name addRecipe
+POST {{host}}/recipes
+Content-Type: application/json
+
+{
+  "name": "Tomato pasta",
+  "steps": ["Boil the pasta.", "Halve the tomatoes.", "Toss together."],
+  "ingredients": [
+    { "ingredientId": "{{tomatoId}}", "amount": 250, "unit": "gram" },
+    { "ingredientId": "{{pastaId}}", "amount": 200, "unit": "gram" }
+  ],
+  "reference": "https://example.com/tomato-pasta",
+  "tags": ["quick", "vegetarian"]
+}
+
+###
+
+@recipeId = {{addRecipe.response.body.id}}
+
+GET {{host}}/recipes
+Accept: application/json
+
+###
+
+GET {{host}}/recipes?search=pasta&tag=quick
+Accept: application/json
+
+###
+
+GET {{host}}/recipes/{{recipeId}}
+Accept: application/json
+
+### Validation: expect 400 listing the domain's own messages ##############
+
+POST {{host}}/recipes
+Content-Type: application/json
+
+{ "name": "", "steps": [], "ingredients": [], "tags": [""] }
+
+### Not found: expect 404 #################################################
+
+GET {{host}}/recipes/00000000-0000-0000-0000-000000000001
+Accept: application/json
+
+### Plan ##################################################################
+
+PUT {{host}}/plan/2026-11-02/dinner
+Content-Type: application/json
+
+{ "recipeId": "{{recipeId}}" }
+
+###
+
+PUT {{host}}/plan/2026-11-04/lunch
+Content-Type: application/json
+
+{ "recipeId": "{{recipeId}}" }
+
+###
+
+GET {{host}}/plan?from=2026-11-02&to=2026-11-08
+Accept: application/json
+
+### Bad meal time: expect 400 #############################################
+
+PUT {{host}}/plan/2026-11-02/brunch
+Content-Type: application/json
+
+{ "recipeId": "{{recipeId}}" }
+
+### Shopping list #########################################################
+
+# Two dinners of the same recipe should sum, not de-duplicate.
+GET {{host}}/shopping-list?from=2026-11-02&to=2026-11-08
+Accept: application/json
+
+### Clearing ##############################################################
+
+DELETE {{host}}/plan/2026-11-04/lunch
+
+###
+
+DELETE {{host}}/recipes/{{recipeId}}
+
+###
+
+DELETE {{host}}/ingredients/{{tomatoId}}

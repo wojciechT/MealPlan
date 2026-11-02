@@ -24,6 +24,8 @@
     <Compile Include="Plans.fs" />
     <Compile Include="RecipeService.fs" />
     <Compile Include="Ingredients.fs" />
+    <Compile Include="Recipes.fs" />
+    <Compile Include="ShoppingList.fs" />
   </ItemGroup>
 
   <ItemGroup>

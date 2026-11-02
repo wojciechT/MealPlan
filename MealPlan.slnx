@@ -1,4 +1,6 @@
 <Solution>
-  <Project Path="MealPlan.Core/MealPlan.Core.fsproj" />
-  <Project Path="MealPlan.Host/MealPlan.Host.csproj" />
+  <Folder Name="/backend/">
+    <Project Path="backend/MealPlan.Core/MealPlan.Core.fsproj" />
+    <Project Path="backend/MealPlan.Host/MealPlan.Host.csproj" />
+  </Folder>
 </Solution>
