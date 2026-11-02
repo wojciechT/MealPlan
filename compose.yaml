@@ -1,0 +1,10 @@
+services:
+  mealplan:
+    build: .
+    network_mode: host
+    volumes:
+      - mealplan-data:/data
+    restart: unless-stopped
+
+volumes:
+  mealplan-data:

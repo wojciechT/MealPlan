@@ -31,9 +31,8 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
-    // Off in development: the Vite dev server proxies plain HTTP to this port,
-    // and a redirect to the HTTPS port breaks every call it forwards.
-    app.UseHttpsRedirection();
+    // No HTTPS redirect: the container serves plain HTTP, and TLS is left to
+    // whatever sits in front of it.
 
     // The built SPA, which `npm run build` writes into wwwroot.
     app.UseDefaultFiles();

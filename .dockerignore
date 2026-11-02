@@ -1,0 +1,17 @@
+.git
+.vs
+.vscode
+.idea
+**/bin
+**/obj
+**/node_modules
+**/dist
+backend/MealPlan.Host/wwwroot
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/appsettings.Development.json
+**/*.user
+Dockerfile
+compose.yaml
+.dockerignore
