@@ -99,7 +99,7 @@ describe('PlannerPage', () => {
     expect(screen.getAllByText('Breakfast')).toHaveLength(7)
   })
 
-  it('renders a planned recipe in its slot', async () => {
+  it('renders every recipe planned in a slot', async () => {
     const today = new Date()
     const iso = `${today.getFullYear()}-${`${today.getMonth() + 1}`.padStart(2, '0')}-${`${today.getDate()}`.padStart(2, '0')}`
 
@@ -107,7 +107,17 @@ describe('PlannerPage', () => {
       'fetch',
       vi.fn(
         stubApi({
-          '/api/plan': [{ date: iso, meals: { dinner: { id: 'r1', name: 'Tomato pasta', tags: ['quick'] } } }],
+          '/api/plan': [
+            {
+              date: iso,
+              meals: {
+                dinner: [
+                  { id: 'r1', name: 'Tomato pasta', tags: ['quick'] },
+                  { id: 'r2', name: 'Green salad', tags: [] },
+                ],
+              },
+            },
+          ],
         }),
       ),
     )
@@ -115,7 +125,10 @@ describe('PlannerPage', () => {
     renderPage(<PlannerPage />)
 
     expect(await screen.findByText('Tomato pasta')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: `Clear Dinner for ${iso}` })).toBeInTheDocument()
+    expect(screen.getByText('Green salad')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: `Remove Tomato pasta from Dinner for ${iso}` })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: `Remove Green salad from Dinner for ${iso}` })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: `Add another recipe to Dinner for ${iso}` })).toBeInTheDocument()
   })
 })
 

@@ -84,17 +84,35 @@ Accept: application/json
 
 ### Plan ##################################################################
 
-PUT {{host}}/plan/2026-11-02/dinner
+POST {{host}}/plan/2026-11-02/dinner
 Content-Type: application/json
 
 { "recipeId": "{{recipeId}}" }
 
 ###
 
-PUT {{host}}/plan/2026-11-04/lunch
+POST {{host}}/plan/2026-11-04/lunch
 Content-Type: application/json
 
 { "recipeId": "{{recipeId}}" }
+
+###
+
+# A second recipe in the same slot; the response lists both, in order.
+# @name addSide
+POST {{host}}/recipes
+Content-Type: application/json
+
+{ "name": "Tomato salad", "steps": ["Slice."], "ingredients": [{ "ingredientId": "{{tomatoId}}", "amount": 150, "unit": "gram" }], "tags": [] }
+
+###
+
+@sideId = {{addSide.response.body.id}}
+
+POST {{host}}/plan/2026-11-02/dinner
+Content-Type: application/json
+
+{ "recipeId": "{{sideId}}" }
 
 ###
 
@@ -103,7 +121,7 @@ Accept: application/json
 
 ### Bad meal time: expect 400 #############################################
 
-PUT {{host}}/plan/2026-11-02/brunch
+POST {{host}}/plan/2026-11-02/brunch
 Content-Type: application/json
 
 { "recipeId": "{{recipeId}}" }
@@ -115,6 +133,10 @@ GET {{host}}/shopping-list?from=2026-11-02&to=2026-11-08
 Accept: application/json
 
 ### Clearing ##############################################################
+
+DELETE {{host}}/plan/2026-11-02/dinner/{{sideId}}
+
+###
 
 DELETE {{host}}/plan/2026-11-04/lunch
 

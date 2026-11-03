@@ -42,7 +42,7 @@ public static class ShoppingListEndpoints
                 // Multiplicity matters: the same recipe twice in the week means
                 // buying for it twice.
                 var cooked = days.ResultValue
-                    .SelectMany(day => day.Meals.Select(slot => slot.Value))
+                    .SelectMany(day => day.Meals.SelectMany(slot => slot.Value))
                     .Select(id => byId.TryGetValue(id, out var recipe) ? recipe : null)
                     .Where(recipe => recipe is not null)
                     .Select(recipe => recipe!);

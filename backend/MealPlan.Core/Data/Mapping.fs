@@ -66,7 +66,7 @@ module Mapping =
             { Date = value.Date
               Meals =
                 value.Meals
-                |> Seq.map (fun (KeyValue(time, recipe)) -> mealTime time, recipe.Id)
+                |> Seq.map (fun (KeyValue(time, recipes)) -> mealTime time, recipes |> List.map _.Id)
                 |> Map.ofSeq }
 
         let mealPlanKey (value: MealPlanKey) : MealPlanKeyEntity =
@@ -125,11 +125,11 @@ module Mapping =
         /// ingredient ids in turn.
         let day resolveRecipe resolveIngredient (value: DayEntity) : Result<Day, string> =
             value.Meals
-            |> Seq.map (fun (KeyValue(time, recipeId)) -> time, recipeId)
+            |> Seq.map (fun (KeyValue(time, recipeIds)) -> time, recipeIds)
             |> List.ofSeq
-            |> traverse (fun (time, recipeId) ->
-                resolveRecipe recipeId
-                |> Result.bind (recipe resolveIngredient)
+            |> traverse (fun (time, recipeIds) ->
+                recipeIds
+                |> traverse (fun recipeId -> resolveRecipe recipeId |> Result.bind (recipe resolveIngredient))
                 |> Result.map (fun found -> mealTime time, found))
             |> Result.map (fun meals -> { Date = value.Date; Meals = Map.ofList meals })
 

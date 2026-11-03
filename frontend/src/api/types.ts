@@ -53,7 +53,8 @@ export interface RecipeSummary {
 export interface Day {
   /** yyyy-MM-dd */
   date: string
-  meals: Partial<Record<MealTime, RecipeSummary>>
+  /** Each slot lists its recipes in the order they were added. */
+  meals: Partial<Record<MealTime, RecipeSummary[]>>
 }
 
 export interface ShoppingLine {

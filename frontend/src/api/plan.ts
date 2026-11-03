@@ -16,9 +16,11 @@ export const usePlan = (from: string, to: string) =>
 interface SlotChange {
   date: string
   mealTime: MealTime
-  /** Present when filling a slot, absent when clearing it. */
-  recipe?: RecipeSummary
+  recipe: RecipeSummary
 }
+
+/** What a change does to the recipes already in its slot. */
+type Apply = (current: RecipeSummary[], recipe: RecipeSummary) => RecipeSummary[]
 
 /**
  * Writing a slot is optimistic: the grid is the thing you are looking at while
@@ -29,6 +31,7 @@ function useSlotMutation(
   from: string,
   to: string,
   write: (change: SlotChange) => Promise<unknown>,
+  apply: Apply,
 ) {
   const client = useQueryClient()
   const key = planKeys.range(from, to)
@@ -47,11 +50,12 @@ function useSlotMutation(
           }
 
           const meals = { ...day.meals }
+          const next = apply(meals[change.mealTime] ?? [], change.recipe)
 
-          if (change.recipe === undefined) {
+          if (next.length === 0) {
             delete meals[change.mealTime]
           } else {
-            meals[change.mealTime] = change.recipe
+            meals[change.mealTime] = next
           }
 
           return { ...day, meals }
@@ -72,10 +76,19 @@ function useSlotMutation(
   })
 }
 
-export const useSetMeal = (from: string, to: string) =>
-  useSlotMutation(from, to, (change) =>
-    api.put(`/plan/${change.date}/${change.mealTime}`, { recipeId: change.recipe!.id }),
+export const useAddMeal = (from: string, to: string) =>
+  useSlotMutation(
+    from,
+    to,
+    (change) => api.post(`/plan/${change.date}/${change.mealTime}`, { recipeId: change.recipe.id }),
+    // The server ignores a recipe the slot already holds; so does the cache.
+    (current, recipe) => (current.some((r) => r.id === recipe.id) ? current : [...current, recipe]),
   )
 
-export const useClearMeal = (from: string, to: string) =>
-  useSlotMutation(from, to, (change) => api.delete(`/plan/${change.date}/${change.mealTime}`))
+export const useRemoveMeal = (from: string, to: string) =>
+  useSlotMutation(
+    from,
+    to,
+    (change) => api.delete(`/plan/${change.date}/${change.mealTime}/${change.recipe.id}`),
+    (current, recipe) => current.filter((r) => r.id !== recipe.id),
+  )

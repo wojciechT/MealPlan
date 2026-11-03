@@ -16,7 +16,7 @@ type RecipeStep =  Step of string
 
 type Recipe = { Id: Guid; Name: string; Steps: RecipeStep list; Ingredients : RecipeIngredient list; Reference: string option; Tags: string list }
 
-type Day = { Date: DateOnly; Meals: Map<MealTime, Recipe> }
+type Day = { Date: DateOnly; Meals: Map<MealTime, Recipe list> }
 
 type MealPlanKey = {Date: DateOnly; Time: MealTime}
 

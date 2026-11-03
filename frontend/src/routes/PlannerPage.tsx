@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { useClearMeal, usePlan, useSetMeal } from '../api/plan'
+import { useAddMeal, usePlan, useRemoveMeal } from '../api/plan'
 import type { Day, MealTime, RecipeSummary } from '../api/types'
 import { MEAL_TIMES } from '../api/types'
 import { RecipePickerDialog } from '../components/RecipePickerDialog'
@@ -17,21 +17,22 @@ function Slot({
   day,
   mealTime,
   onPick,
-  onClear,
+  onRemove,
 }: {
   day: Day
   mealTime: MealTime
   onPick: () => void
-  onClear: () => void
+  onRemove: (recipe: RecipeSummary) => void
 }) {
-  const recipe = day.meals[mealTime]
+  const recipes = day.meals[mealTime] ?? []
+  const label = `${mealTimeLabel(mealTime)} for ${day.date}`
 
-  if (recipe === undefined) {
+  if (recipes.length === 0) {
     return (
       <button
         type="button"
         onClick={onPick}
-        aria-label={`Add ${mealTimeLabel(mealTime)} for ${day.date}`}
+        aria-label={`Add ${label}`}
         className="h-full min-h-16 w-full rounded-md border border-dashed border-line text-ink-soft/50 transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
       >
         +
@@ -40,18 +41,30 @@ function Slot({
   }
 
   return (
-    <div className="group relative h-full min-h-16 rounded-md border border-line bg-surface p-2">
-      <p className="pr-4 text-sm leading-snug font-medium">{recipe.name}</p>
-      {recipe.tags.length > 0 && (
-        <p className="mt-1 truncate text-xs text-ink-soft">{recipe.tags.join(' · ')}</p>
-      )}
+    <div className="space-y-1">
+      {recipes.map((recipe) => (
+        <div key={recipe.id} className="group relative rounded-md border border-line bg-surface p-2">
+          <p className="pr-4 text-sm leading-snug font-medium">{recipe.name}</p>
+          {recipe.tags.length > 0 && (
+            <p className="mt-1 truncate text-xs text-ink-soft">{recipe.tags.join(' · ')}</p>
+          )}
+          <button
+            type="button"
+            onClick={() => onRemove(recipe)}
+            aria-label={`Remove ${recipe.name} from ${label}`}
+            className="absolute top-1 right-1 rounded px-1 text-ink-soft opacity-0 transition hover:bg-danger-soft hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
       <button
         type="button"
-        onClick={onClear}
-        aria-label={`Clear ${mealTimeLabel(mealTime)} for ${day.date}`}
-        className="absolute top-1 right-1 rounded px-1 text-ink-soft opacity-0 transition hover:bg-danger-soft hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
+        onClick={onPick}
+        aria-label={`Add another recipe to ${label}`}
+        className="w-full rounded-md border border-dashed border-line py-0.5 text-xs text-ink-soft/50 transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
       >
-        ✕
+        +
       </button>
     </div>
   )
@@ -62,14 +75,14 @@ export default function PlannerPage() {
   const [target, setTarget] = useState<Target | null>(null)
 
   const { data, isPending, error } = usePlan(week.from, week.to)
-  const setMeal = useSetMeal(week.from, week.to)
-  const clearMeal = useClearMeal(week.from, week.to)
+  const addMeal = useAddMeal(week.from, week.to)
+  const removeMeal = useRemoveMeal(week.from, week.to)
 
   const days = data ?? []
 
   const pick = (recipe: RecipeSummary) => {
     if (target !== null) {
-      setMeal.mutate({ ...target, recipe })
+      addMeal.mutate({ ...target, recipe })
     }
   }
 
@@ -92,7 +105,7 @@ export default function PlannerPage() {
         </div>
       </div>
 
-      <ErrorBanner error={error ?? setMeal.error ?? clearMeal.error} />
+      <ErrorBanner error={error ?? addMeal.error ?? removeMeal.error} />
 
       {isPending ? (
         <Spinner />
@@ -121,7 +134,7 @@ export default function PlannerPage() {
                     day={day}
                     mealTime={mealTime}
                     onPick={() => setTarget({ date: day.date, mealTime })}
-                    onClear={() => clearMeal.mutate({ date: day.date, mealTime })}
+                    onRemove={(recipe) => removeMeal.mutate({ date: day.date, mealTime, recipe })}
                   />
                 </div>
               ))}

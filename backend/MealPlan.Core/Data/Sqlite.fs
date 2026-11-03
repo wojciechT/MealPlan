@@ -58,11 +58,35 @@ module Sqlite =
         );
 
         CREATE TABLE IF NOT EXISTS day_meals (
-            date      TEXT NOT NULL REFERENCES days(date) ON DELETE CASCADE,
-            meal_time TEXT NOT NULL,
-            recipe_id TEXT NOT NULL REFERENCES recipes(id),
-            PRIMARY KEY (date, meal_time)
+            date      TEXT    NOT NULL REFERENCES days(date) ON DELETE CASCADE,
+            meal_time TEXT    NOT NULL,
+            recipe_id TEXT    NOT NULL REFERENCES recipes(id),
+            ordinal   INTEGER NOT NULL,
+            PRIMARY KEY (date, meal_time, recipe_id)
         );
+        """
+
+    /// Databases created when a slot held a single recipe have `day_meals`
+    /// keyed by (date, meal_time) and no `ordinal`. The key cannot be altered
+    /// in place, so the table is rebuilt and each old meal becomes the first
+    /// (and only) recipe of its slot.
+    [<Literal>]
+    let private multiRecipeMeals =
+        """
+        ALTER TABLE day_meals RENAME TO day_meals_single;
+
+        CREATE TABLE day_meals (
+            date      TEXT    NOT NULL REFERENCES days(date) ON DELETE CASCADE,
+            meal_time TEXT    NOT NULL,
+            recipe_id TEXT    NOT NULL REFERENCES recipes(id),
+            ordinal   INTEGER NOT NULL,
+            PRIMARY KEY (date, meal_time, recipe_id)
+        );
+
+        INSERT INTO day_meals (date, meal_time, recipe_id, ordinal)
+        SELECT date, meal_time, recipe_id, 0 FROM day_meals_single;
+
+        DROP TABLE day_meals_single;
         """
 
     /// SQLite's constraint-violation result code, raised by a duplicate primary
@@ -93,6 +117,23 @@ module Sqlite =
         task {
             use! conn = connect connectionString ct
             do! execute conn ct schema
+
+            let! hasOrdinal =
+                task {
+                    use cmd = conn.CreateCommand()
+                    cmd.CommandText <- "SELECT 1 FROM pragma_table_info('day_meals') WHERE name = 'ordinal'"
+                    let! found = cmd.ExecuteScalarAsync ct
+                    return not (isNull found)
+                }
+
+            if not hasOrdinal then
+                let! transaction = conn.BeginTransactionAsync ct
+                use tx = transaction :?> SqliteTransaction
+                use cmd = conn.CreateCommand()
+                cmd.CommandText <- multiRecipeMeals
+                cmd.Transaction <- tx
+                let! _ = cmd.ExecuteNonQueryAsync ct
+                do! tx.CommitAsync ct
         }
 
     let command (conn: SqliteConnection) (tx: SqliteTransaction) (sql: string) (parameters: (string * obj) list) =

@@ -11,18 +11,24 @@ public static class PlanEndpoints
     /// to pay for resolving them.
     private static DayResponse ToResponse(DayEntity day, IReadOnlyDictionary<Guid, RecipeEntity> recipes)
     {
-        var meals = new Dictionary<string, RecipeSummaryResponse>();
+        var meals = new Dictionary<string, RecipeSummaryResponse[]>();
 
         foreach (var slot in day.Meals)
         {
-            if (!recipes.TryGetValue(slot.Value, out var recipe))
+            var planned = slot.Value
+                .Select(id => recipes.TryGetValue(id, out var recipe) ? recipe : null)
+                .Where(recipe => recipe is not null)
+                .Select(recipe => new RecipeSummaryResponse(recipe!.Id, recipe.Name, recipe.Tags.ToArray()))
+                .ToArray();
+
+            if (planned.Length == 0)
             {
                 continue;
             }
 
             var mealTime = MealTimeModule.format(Mapping.Domain.mealTime(slot.Key));
 
-            meals[mealTime] = new RecipeSummaryResponse(recipe.Id, recipe.Name, recipe.Tags.ToArray());
+            meals[mealTime] = planned;
         }
 
         return new DayResponse(day.Date, meals);
@@ -64,10 +70,12 @@ public static class PlanEndpoints
         })
         .WithName("GetPlan");
 
-        group.MapPut("/{date}/{mealTime}", async (
+        // Adds to the slot rather than replacing it: a meal can be several
+        // recipes. Adding one the slot already holds is a no-op.
+        group.MapPost("/{date}/{mealTime}", async (
             DateOnly date,
             string mealTime,
-            SetMealRequest request,
+            AddMealRequest request,
             IRepository<DateOnly, DayEntity> plans,
             CancellationToken ct) =>
         {
@@ -78,11 +86,31 @@ public static class PlanEndpoints
                 return ApiResults.Invalid([$"'{mealTime}' is not a meal time."]);
             }
 
-            var result = await Plans.setMeal(plans, date, slot.Value, request.RecipeId, ct);
+            var result = await Plans.addMeal(plans, date, slot.Value, request.RecipeId, ct);
 
-            return ApiResults.FromRepository(result, _ => Results.NoContent());
+            return ApiResults.FromRepository(result, Results.NoContent());
         })
-        .WithName("SetMeal");
+        .WithName("AddMeal");
+
+        group.MapDelete("/{date}/{mealTime}/{recipeId:guid}", async (
+            DateOnly date,
+            string mealTime,
+            Guid recipeId,
+            IRepository<DateOnly, DayEntity> plans,
+            CancellationToken ct) =>
+        {
+            var slot = MealTimeModule.parse(mealTime);
+
+            if (slot is null)
+            {
+                return ApiResults.Invalid([$"'{mealTime}' is not a meal time."]);
+            }
+
+            var result = await Plans.removeMeal(plans, date, slot.Value, recipeId, ct);
+
+            return ApiResults.FromRepository(result, Results.NoContent());
+        })
+        .WithName("RemoveMeal");
 
         group.MapDelete("/{date}/{mealTime}", async (
             DateOnly date,
@@ -97,7 +125,7 @@ public static class PlanEndpoints
                 return ApiResults.Invalid([$"'{mealTime}' is not a meal time."]);
             }
 
-            // Clearing an already-empty slot succeeds: the caller asked for an
+            // Clears every recipe in the slot. Clearing an already-empty slot succeeds: the caller asked for an
             // end state, and that is the state.
             var result = await Plans.clearMeal(plans, date, slot.Value, ct);
 

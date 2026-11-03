@@ -21,6 +21,6 @@ type RecipeIngredientEntity = { Ingredient : Guid; Quantity: IngredientQuantityE
 
 type RecipeEntity = { Id: Guid; Name: string; Steps: string list; Ingredients : RecipeIngredientEntity list; Reference: string option; Tags: string list }
 
-type DayEntity = { Date: DateOnly; Meals: Map<MealTimeEntity, Guid> }
+type DayEntity = { Date: DateOnly; Meals: Map<MealTimeEntity, Guid list> }
 
 type MealPlanKeyEntity = {Date: DateOnly; Time: MealTimeEntity}

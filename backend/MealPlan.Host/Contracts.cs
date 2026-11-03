@@ -37,9 +37,9 @@ public record RecipeRequest(
 /// What the planner grid needs of a recipe: enough to render a slot.
 public record RecipeSummaryResponse(Guid Id, string Name, string[] Tags);
 
-public record DayResponse(DateOnly Date, Dictionary<string, RecipeSummaryResponse> Meals);
+public record DayResponse(DateOnly Date, Dictionary<string, RecipeSummaryResponse[]> Meals);
 
-public record SetMealRequest(Guid RecipeId);
+public record AddMealRequest(Guid RecipeId);
 
 public record ShoppingLineResponse(Guid IngredientId, string Name, uint Amount, string Unit);
 

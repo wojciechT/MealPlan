@@ -16,13 +16,24 @@ type SqlitePlanRepository(connectionString: string) =
             return Option.isSome row
         }
 
+    /// Groups (meal time, recipe) rows into slots, keeping the rows' order.
+    let slots (rows: (MealTimeEntity * Guid) list) =
+        rows
+        |> List.groupBy fst
+        |> List.map (fun (mealTime, recipes) -> mealTime, recipes |> List.map snd)
+        |> Map.ofList
+
     let readMeals conn tx ct (date: DateOnly) =
         task {
             use cmd =
-                Sqlite.command conn tx "SELECT meal_time, recipe_id FROM day_meals WHERE date = $date" [ "$date", Sqlite.date date ]
+                Sqlite.command
+                    conn
+                    tx
+                    "SELECT meal_time, recipe_id FROM day_meals WHERE date = $date ORDER BY ordinal"
+                    [ "$date", Sqlite.date date ]
 
             let! meals = Sqlite.rows cmd ct (fun reader -> Sqlite.readMealTime reader 0, Sqlite.readGuid reader 1)
-            return Map.ofList meals
+            return slots meals
         }
 
     /// Loads every plan with two queries rather than one per day.
@@ -30,7 +41,8 @@ type SqlitePlanRepository(connectionString: string) =
         Sqlite.transact connectionString ct (fun conn tx ->
             task {
                 let! meals =
-                    use cmd = Sqlite.command conn tx "SELECT date, meal_time, recipe_id FROM day_meals" []
+                    use cmd =
+                        Sqlite.command conn tx "SELECT date, meal_time, recipe_id FROM day_meals ORDER BY ordinal" []
 
                     Sqlite.rows cmd ct (fun reader ->
                         Sqlite.readDate reader 0, (Sqlite.readMealTime reader 1, Sqlite.readGuid reader 2))
@@ -38,7 +50,7 @@ type SqlitePlanRepository(connectionString: string) =
                 let meals =
                     meals
                     |> List.groupBy fst
-                    |> List.map (fun (date, rows) -> date, rows |> List.map snd |> Map.ofList)
+                    |> List.map (fun (date, rows) -> date, rows |> List.map snd |> slots)
                     |> Map.ofList
 
                 use cmd = Sqlite.command conn tx "SELECT date FROM days ORDER BY date" []
@@ -55,18 +67,20 @@ type SqlitePlanRepository(connectionString: string) =
 
     let writeMeals conn tx ct (day: DayEntity) =
         task {
-            for KeyValue(mealTime, recipeId) in day.Meals do
-                use cmd =
-                    Sqlite.command
-                        conn
-                        tx
-                        "INSERT INTO day_meals (date, meal_time, recipe_id) VALUES ($date, $meal_time, $recipe_id)"
-                        [ "$date", Sqlite.date day.Date
-                          "$meal_time", box (Sqlite.mealTimeText mealTime)
-                          "$recipe_id", Sqlite.guid recipeId ]
+            for KeyValue(mealTime, recipeIds) in day.Meals do
+                for ordinal, recipeId in List.indexed recipeIds do
+                    use cmd =
+                        Sqlite.command
+                            conn
+                            tx
+                            "INSERT INTO day_meals (date, meal_time, recipe_id, ordinal) VALUES ($date, $meal_time, $recipe_id, $ordinal)"
+                            [ "$date", Sqlite.date day.Date
+                              "$meal_time", box (Sqlite.mealTimeText mealTime)
+                              "$recipe_id", Sqlite.guid recipeId
+                              "$ordinal", box ordinal ]
 
-                let! _ = cmd.ExecuteNonQueryAsync ct
-                ()
+                    let! _ = cmd.ExecuteNonQueryAsync ct
+                    ()
         }
 
     interface IRepository<DateOnly, DayEntity> with
