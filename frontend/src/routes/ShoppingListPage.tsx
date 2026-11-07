@@ -1,10 +1,14 @@
+import { useMutation } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useShoppingList } from '../api/shoppingList'
+import type { ShoppingLine } from '../api/types'
 import { Button, EmptyState, ErrorBanner, Field, Input, Spinner, cx } from '../components/ui'
 import { formatQuantity } from '../lib/units'
 import { weekOf } from '../lib/week'
 
 const STORAGE_KEY = 'mealplan.shopping.ticked'
+
+const lineKey = (line: ShoppingLine) => `${line.ingredientId}:${line.unit}`
 
 /**
  * Ticking something off is a note to yourself while you walk round a shop, not
@@ -46,6 +50,14 @@ export default function ShoppingListPage() {
   const categories = data ?? []
   const total = categories.reduce((count, category) => count + category.lines.length, 0)
 
+  const pdf = useMutation({
+    mutationFn: async () => {
+      // Loaded on demand: the PDF library is far bigger than the rest of the app.
+      const { downloadShoppingListPdf } = await import('../lib/shoppingListPdf')
+      await downloadShoppingListPdf(categories, from, to, (line) => ticked.has(lineKey(line)))
+    },
+  })
+
   return (
     <div className="max-w-2xl space-y-4">
       <div>
@@ -69,6 +81,9 @@ export default function ShoppingListPage() {
         >
           This week
         </Button>
+        <Button disabled={total === 0 || pdf.isPending} onClick={() => pdf.mutate()}>
+          {pdf.isPending ? 'Preparing…' : 'Download PDF'}
+        </Button>
         {ticked.size > 0 && (
           <Button variant="ghost" onClick={clear}>
             Untick all
@@ -76,7 +91,7 @@ export default function ShoppingListPage() {
         )}
       </div>
 
-      <ErrorBanner error={error} />
+      <ErrorBanner error={error ?? pdf.error} />
 
       {isPending ? (
         <Spinner />
@@ -91,7 +106,7 @@ export default function ShoppingListPage() {
               </h2>
               <ul className="overflow-hidden rounded-lg border border-line">
                 {category.lines.map((line) => {
-                  const key = `${line.ingredientId}:${line.unit}`
+                  const key = lineKey(line)
                   const done = ticked.has(key)
 
                   return (

@@ -1,12 +1,16 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ShoppingLine } from '../api/types'
 import IngredientsPage from './IngredientsPage'
 import PlannerPage from './PlannerPage'
 import RecipeEditorPage from './RecipeEditorPage'
 import RecipesPage from './RecipesPage'
 import ShoppingListPage from './ShoppingListPage'
-import { ingredients, renderPage, stubApi } from '../test/render'
+import { downloadShoppingListPdf } from '../lib/shoppingListPdf'
+import { ingredients, renderPage, shoppingList, stubApi } from '../test/render'
+
+vi.mock('../lib/shoppingListPdf', () => ({ downloadShoppingListPdf: vi.fn(async () => {}) }))
 
 beforeEach(() => {
   localStorage.clear()
@@ -350,5 +354,40 @@ describe('ShoppingListPage', () => {
 
     expect(box).toBeChecked()
     expect(localStorage.getItem('mealplan.shopping.ticked')).toContain('i1:gram')
+  })
+
+  it('downloads what is on screen, ticks included', async () => {
+    vi.mocked(downloadShoppingListPdf).mockClear()
+    renderPage(<ShoppingListPage />)
+    await screen.findByText('Tomato')
+    await userEvent.click(screen.getByRole('checkbox'))
+    await userEvent.click(screen.getByRole('button', { name: 'Download PDF' }))
+
+    await vi.waitFor(() => expect(downloadShoppingListPdf).toHaveBeenCalledOnce())
+
+    const [categories, from, to, isTicked] = vi.mocked(downloadShoppingListPdf).mock.calls[0]
+    expect(categories).toEqual(shoppingList)
+    expect(from).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(to).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(isTicked(shoppingList[0].lines[0] as ShoppingLine)).toBe(true)
+  })
+
+  it('offers no download when there is nothing to buy', async () => {
+    vi.stubGlobal('fetch', vi.fn(stubApi({ '/api/shopping-list': [] })))
+
+    renderPage(<ShoppingListPage />)
+
+    expect(await screen.findByText('Nothing to buy')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeDisabled()
+  })
+
+  it('shows why a download failed', async () => {
+    vi.mocked(downloadShoppingListPdf).mockRejectedValueOnce(new Error('The PDF font could not be loaded.'))
+
+    renderPage(<ShoppingListPage />)
+    await screen.findByText('Tomato')
+    await userEvent.click(screen.getByRole('button', { name: 'Download PDF' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('The PDF font could not be loaded.')
   })
 })
