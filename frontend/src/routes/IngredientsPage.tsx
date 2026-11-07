@@ -105,37 +105,45 @@ function NewRow() {
   }
 
   return (
-    <tr className="border-t border-line bg-surface-sunken/40">
-      <td className="p-2">
-        <Input
-          value={name}
-          placeholder="Tomato"
-          aria-label="New ingredient name"
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submit()}
-        />
-      </td>
-      <td className="p-2">
-        <Input
-          value={category}
-          placeholder="Vegetables"
-          aria-label="New ingredient category"
-          onChange={(e) => setCategory(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submit()}
-        />
-      </td>
-      <td className="p-2 text-right">
-        <Button variant="primary" onClick={submit} disabled={add.isPending}>
-          Add
-        </Button>
-      </td>
-    </tr>
+    <>
+      <tr className="border-t border-line bg-surface-sunken/40">
+        <td className="p-2">
+          <Input
+            value={name}
+            placeholder="Tomato"
+            aria-label="New ingredient name"
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submit()}
+          />
+        </td>
+        <td className="p-2">
+          <Input
+            value={category}
+            placeholder="Vegetables"
+            aria-label="New ingredient category"
+            onChange={(e) => setCategory(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submit()}
+          />
+        </td>
+        <td className="p-2 text-right">
+          <Button variant="primary" onClick={submit} disabled={add.isPending}>
+            Add
+          </Button>
+        </td>
+      </tr>
+      {add.error !== null && (
+        <tr>
+          <td colSpan={3} className="px-2 pb-2">
+            <ErrorBanner error={add.error} />
+          </td>
+        </tr>
+      )}
+    </>
   )
 }
 
 export default function IngredientsPage() {
   const { data, isPending, error } = useIngredients()
-  const add = useAddIngredient()
 
   return (
     <div className="space-y-4">
@@ -146,7 +154,7 @@ export default function IngredientsPage() {
         </p>
       </div>
 
-      <ErrorBanner error={error ?? add.error} />
+      <ErrorBanner error={error} />
 
       {isPending ? (
         <Spinner />

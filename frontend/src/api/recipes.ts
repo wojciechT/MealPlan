@@ -50,6 +50,23 @@ export function useSaveRecipe() {
   })
 }
 
+/** The copy is a new recipe: nothing but the name tells it from the original. */
+export function useCopyRecipe() {
+  const client = useQueryClient()
+
+  return useMutation({
+    mutationFn: (recipe: Recipe) =>
+      api.post<Recipe>('/recipes', {
+        name: `${recipe.name} (copy)`,
+        steps: recipe.steps,
+        ingredients: recipe.ingredients.map(({ ingredientId, amount, unit }) => ({ ingredientId, amount, unit })),
+        reference: recipe.reference,
+        tags: recipe.tags,
+      } satisfies RecipeRequest),
+    onSuccess: () => invalidateAll(client),
+  })
+}
+
 export function useDeleteRecipe() {
   const client = useQueryClient()
 

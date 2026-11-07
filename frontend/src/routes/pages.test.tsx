@@ -6,7 +6,7 @@ import PlannerPage from './PlannerPage'
 import RecipeEditorPage from './RecipeEditorPage'
 import RecipesPage from './RecipesPage'
 import ShoppingListPage from './ShoppingListPage'
-import { renderPage, stubApi } from '../test/render'
+import { ingredients, renderPage, stubApi } from '../test/render'
 
 beforeEach(() => {
   localStorage.clear()
@@ -45,6 +45,29 @@ describe('IngredientsPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Something still uses this')
   })
+
+  it('shows the error the backend sent when a duplicate is refused', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+        init?.method === 'POST'
+          ? ({
+              ok: false,
+              status: 409,
+              json: async () => ({ detail: "An ingredient named 'tomato' already exists." }),
+            } as Response)
+          : stubApi()(input),
+      ),
+    )
+
+    renderPage(<IngredientsPage />)
+    await screen.findByText('Tomato')
+    await userEvent.type(screen.getByLabelText('New ingredient name'), 'tomato')
+    await userEvent.type(screen.getByLabelText('New ingredient category'), 'Vegetables{Enter}')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('already exists')
+    expect(screen.getByLabelText('New ingredient name')).toHaveValue('tomato')
+  })
 })
 
 describe('RecipesPage', () => {
@@ -57,6 +80,32 @@ describe('RecipesPage', () => {
     expect(within(card).getByText('quick')).toBeInTheDocument()
     expect(within(card).getByText(/Tomato 250 g/)).toBeInTheDocument()
     expect(within(card).getByText('2 steps')).toBeInTheDocument()
+  })
+
+  it('copies a recipe as a new one under a marked name', async () => {
+    const fetchStub = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => stubApi()(input))
+    vi.stubGlobal('fetch', fetchStub)
+
+    renderPage(<RecipesPage />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Copy Tomato pasta' }))
+
+    const post = await vi.waitFor(() => {
+      const call = fetchStub.mock.calls.find(([, init]) => init?.method === 'POST')
+      expect(call).toBeDefined()
+      return call!
+    })
+
+    expect(String(post[0])).toBe('/api/recipes')
+    expect(JSON.parse(String(post[1]?.body))).toEqual({
+      name: 'Tomato pasta (copy)',
+      steps: ['Boil the pasta.', 'Toss together.'],
+      ingredients: [
+        { ingredientId: 'i1', amount: 250, unit: 'gram' },
+        { ingredientId: 'i2', amount: 200, unit: 'gram' },
+      ],
+      reference: null,
+      tags: ['quick'],
+    })
   })
 })
 
@@ -74,6 +123,73 @@ describe('RecipeEditorPage', () => {
     // The select exists before its options do, so wait on an option.
     expect(await screen.findByRole('option', { name: 'Tomato (Vegetables)' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Pasta (Dry goods)' })).toBeInTheDocument()
+  })
+
+  it('saves a recipe whose only step was left blank with no steps', async () => {
+    const fetchStub = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => stubApi()(input))
+    vi.stubGlobal('fetch', fetchStub)
+
+    renderPage(<RecipeEditorPage />, '/recipes/new')
+    await screen.findByRole('option', { name: 'Tomato (Vegetables)' })
+    await userEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
+
+    const post = await vi.waitFor(() => {
+      const call = fetchStub.mock.calls.find(([, init]) => init?.method === 'POST')
+      expect(call).toBeDefined()
+      return call!
+    })
+
+    expect(JSON.parse(String(post[1]?.body))).toMatchObject({ steps: [] })
+  })
+
+  it('creates an ingredient in place and adds it to the recipe', async () => {
+    let catalogue = ingredients
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          const added = { id: 'i3', ...(JSON.parse(String(init.body)) as { name: string; category: string }) }
+          catalogue = [...catalogue, added]
+          return { ok: true, status: 201, json: async () => added } as Response
+        }
+
+        return stubApi({ '/api/ingredients': catalogue })(input)
+      }),
+    )
+
+    renderPage(<RecipeEditorPage />, '/recipes/new')
+    await screen.findByRole('option', { name: 'Tomato (Vegetables)' })
+
+    await userEvent.type(screen.getByLabelText('Step 1'), 'Chop.')
+    await userEvent.click(screen.getByRole('button', { name: 'New ingredient' }))
+    await userEvent.type(screen.getByLabelText('New ingredient name'), 'Basil')
+    await userEvent.type(screen.getByLabelText('New ingredient category'), 'Herbs')
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }))
+
+    // Named on the row means the row found its ingredient in the catalogue.
+    expect(await screen.findByRole('button', { name: 'Remove Basil' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('New ingredient name')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Step 1')).toHaveValue('Chop.')
+  })
+
+  it('keeps the form open and shows why when adding an ingredient fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+        init?.method === 'POST'
+          ? ({ ok: false, status: 400, json: async () => ({ detail: 'That is not an ingredient.' }) } as Response)
+          : stubApi()(input),
+      ),
+    )
+
+    renderPage(<RecipeEditorPage />, '/recipes/new')
+    await userEvent.click(await screen.findByRole('button', { name: 'New ingredient' }))
+    await userEvent.type(screen.getByLabelText('New ingredient name'), 'Basil')
+    await userEvent.type(screen.getByLabelText('New ingredient category'), 'Herbs{Enter}')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('That is not an ingredient.')
+    expect(screen.getByLabelText('New ingredient name')).toHaveValue('Basil')
   })
 })
 

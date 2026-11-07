@@ -32,7 +32,7 @@ describe('error handling', () => {
     respondWith(400, {
       title: 'The recipe is not valid.',
       status: 400,
-      errors: ['A recipe needs a name.', 'A recipe needs at least one step.'],
+      errors: ['A recipe needs a name.', 'A recipe needs at least one ingredient.'],
     })
 
     const error = await api.post('/recipes', {}).catch((e: unknown) => e)
@@ -41,7 +41,7 @@ describe('error handling', () => {
     expect((error as ApiError).status).toBe(400)
     expect((error as ApiError).messages).toEqual([
       'A recipe needs a name.',
-      'A recipe needs at least one step.',
+      'A recipe needs at least one ingredient.',
     ])
   })
 

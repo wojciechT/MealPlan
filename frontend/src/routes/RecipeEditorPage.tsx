@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { useIngredients } from '../api/ingredients'
+import { useAddIngredient, useIngredients } from '../api/ingredients'
 import { useRecipe, useSaveRecipe } from '../api/recipes'
-import type { Recipe, RecipeRequest, Unit } from '../api/types'
+import type { Ingredient, Recipe, RecipeRequest, Unit } from '../api/types'
 import { UNITS } from '../api/types'
 import { Button, ErrorBanner, Field, Input, Select, Spinner, cx } from '../components/ui'
 import { unitLabel } from '../lib/units'
@@ -61,6 +61,57 @@ const toRequest = (draft: Draft): RecipeRequest => ({
     .filter((tag) => tag !== ''),
 })
 
+function NewIngredientForm({
+  onAdded,
+  onCancel,
+}: {
+  onAdded: (ingredient: Ingredient) => void
+  onCancel: () => void
+}) {
+  const [name, setName] = useState('')
+  const [category, setCategory] = useState('')
+  const add = useAddIngredient()
+
+  const submit = () => {
+    if (name.trim() === '' || category.trim() === '' || add.isPending) {
+      return
+    }
+
+    // `useAddIngredient` waits on the catalogue refetch before this runs, so
+    // the new row can already find its ingredient by id.
+    add.mutate({ name, category }, { onSuccess: onAdded })
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border border-line bg-surface-sunken/40 p-2">
+      <ErrorBanner error={add.error} />
+      <div className="flex items-center gap-2">
+        <Input
+          value={name}
+          placeholder="Tomato"
+          aria-label="New ingredient name"
+          autoFocus
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && submit()}
+        />
+        <Input
+          value={category}
+          placeholder="Vegetables"
+          aria-label="New ingredient category"
+          onChange={(e) => setCategory(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && submit()}
+        />
+        <Button variant="primary" onClick={submit} disabled={add.isPending}>
+          Add
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export default function RecipeEditorPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -69,6 +120,7 @@ export default function RecipeEditorPage() {
   const save = useSaveRecipe()
 
   const [draft, setDraft] = useState<Draft>(emptyDraft)
+  const [creatingIngredient, setCreatingIngredient] = useState(false)
 
   // The form is uncontrolled by the server after the first load: re-seeding it
   // on every refetch would discard whatever is half-typed.
@@ -99,6 +151,14 @@ export default function RecipeEditorPage() {
     patch({
       ingredients: draft.ingredients.map((row, i) => (i === index ? { ...row, ...changes } : row)),
     })
+
+  // Works from the current draft: a new ingredient lands after a round trip,
+  // and anything typed in the meantime has to survive it.
+  const addRow = (ingredientId: string) =>
+    setDraft((current) => ({
+      ...current,
+      ingredients: [...current.ingredients, { ingredientId, amount: '1', unit: 'gram' }],
+    }))
 
   const submit = () =>
     save.mutate({ id, ...toRequest(draft) }, { onSuccess: () => void navigate('/recipes') })
@@ -142,13 +202,13 @@ export default function RecipeEditorPage() {
                 min={1}
                 value={row.amount}
                 aria-label="Amount"
-                className="w-24"
+                className="w-24! shrink-0"
                 onChange={(e) => setRow(index, { amount: e.target.value })}
               />
               <Select
                 value={row.unit}
                 aria-label="Unit"
-                className="w-24"
+                className="w-24! shrink-0"
                 onChange={(e) => setRow(index, { unit: e.target.value as Unit })}
               >
                 {UNITS.map((unit) => (
@@ -173,15 +233,7 @@ export default function RecipeEditorPage() {
         <Select
           value=""
           aria-label="Add ingredient"
-          onChange={(e) =>
-            e.target.value !== '' &&
-            patch({
-              ingredients: [
-                ...draft.ingredients,
-                { ingredientId: e.target.value, amount: '1', unit: 'gram' },
-              ],
-            })
-          }
+          onChange={(e) => e.target.value !== '' && addRow(e.target.value)}
         >
           <option value="">Add an ingredient…</option>
           {unused.map((ingredient) => (
@@ -191,10 +243,20 @@ export default function RecipeEditorPage() {
           ))}
         </Select>
 
+        {creatingIngredient ? (
+          <NewIngredientForm
+            onAdded={(ingredient) => {
+              addRow(ingredient.id)
+              setCreatingIngredient(false)
+            }}
+            onCancel={() => setCreatingIngredient(false)}
+          />
+        ) : (
+          <Button onClick={() => setCreatingIngredient(true)}>New ingredient</Button>
+        )}
+
         {catalogue?.length === 0 && (
-          <p className="text-sm text-ink-soft">
-            No ingredients in the catalogue yet — add some on the Ingredients page first.
-          </p>
+          <p className="text-sm text-ink-soft">No ingredients in the catalogue yet — create the first one here.</p>
         )}
       </section>
 

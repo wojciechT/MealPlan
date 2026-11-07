@@ -4,7 +4,6 @@ open System
 
 type AddRecipeError =
     | BlankName
-    | NoSteps
     | BlankStep of index: int
     | NoIngredients
     | BlankIngredientName
@@ -19,7 +18,6 @@ module AddRecipeError =
     let describe error =
         match error with
         | BlankName -> "A recipe needs a name."
-        | NoSteps -> "A recipe needs at least one step."
         | BlankStep i -> $"Step %d{i + 1} is empty."
         | NoIngredients -> "A recipe needs at least one ingredient."
         | BlankIngredientName -> "An ingredient has no name."
@@ -39,15 +37,12 @@ module RecipeService =
         if isBlank name then "<unnamed>" else trim name
 
     let private validateSteps steps =
-        match steps with
-        | [] -> [ NoSteps ], []
-        | _ ->
-            let errors =
-                steps
-                |> List.indexed
-                |> List.choose (fun (i, Step text) -> if isBlank text then Some(BlankStep i) else None)
+        let errors =
+            steps
+            |> List.indexed
+            |> List.choose (fun (i, Step text) -> if isBlank text then Some(BlankStep i) else None)
 
-            errors, steps |> List.map (fun (Step text) -> Step(trim text))
+        errors, steps |> List.map (fun (Step text) -> Step(trim text))
 
     let private validateIngredient (recipeIngredient: RecipeIngredient) =
         let ingredient = recipeIngredient.Ingredient

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { useDeleteRecipe, useRecipes } from '../api/recipes'
+import { useCopyRecipe, useDeleteRecipe, useRecipes } from '../api/recipes'
 import { formatQuantity } from '../lib/units'
 import { Button, EmptyState, ErrorBanner, Input, Spinner, cx } from '../components/ui'
 
@@ -8,6 +8,7 @@ export default function RecipesPage() {
   const [search, setSearch] = useState('')
   const [tag, setTag] = useState<string | undefined>(undefined)
   const { data, isPending, error } = useRecipes({ search, tag })
+  const copy = useCopyRecipe()
   const remove = useDeleteRecipe()
 
   const recipes = data ?? []
@@ -58,7 +59,7 @@ export default function RecipesPage() {
         ))}
       </div>
 
-      <ErrorBanner error={error ?? remove.error} />
+      <ErrorBanner error={error ?? copy.error ?? remove.error} />
 
       {isPending ? (
         <Spinner />
@@ -94,13 +95,23 @@ export default function RecipesPage() {
                 <span className="text-xs text-ink-soft">
                   {recipe.steps.length} step{recipe.steps.length === 1 ? '' : 's'}
                 </span>
-                <Button
-                  variant="danger"
-                  disabled={remove.isPending}
-                  onClick={() => remove.mutate(recipe.id)}
-                >
-                  Delete
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    aria-label={`Copy ${recipe.name}`}
+                    disabled={copy.isPending}
+                    onClick={() => copy.mutate(recipe)}
+                  >
+                    Copy
+                  </Button>
+                  <Button
+                    variant="danger"
+                    disabled={remove.isPending}
+                    onClick={() => remove.mutate(recipe.id)}
+                  >
+                    Delete
+                  </Button>
+                </div>
               </div>
             </li>
           ))}
