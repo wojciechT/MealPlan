@@ -120,9 +120,95 @@ describe('RecipeEditorPage', () => {
   it('offers the catalogue as ingredients to add', async () => {
     renderPage(<RecipeEditorPage />, '/recipes/new')
 
-    // The select exists before its options do, so wait on an option.
+    await userEvent.click(await screen.findByRole('combobox', { name: 'Add ingredient' }))
+
+    // The list opens before the catalogue arrives, so wait on an option.
     expect(await screen.findByRole('option', { name: 'Tomato (Vegetables)' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Pasta (Dry goods)' })).toBeInTheDocument()
+  })
+
+  it('narrows the ingredients by name or category, ignoring case', async () => {
+    renderPage(<RecipeEditorPage />, '/recipes/new')
+    const search = await screen.findByRole('combobox', { name: 'Add ingredient' })
+    await userEvent.click(search)
+    await screen.findByRole('option', { name: 'Tomato (Vegetables)' })
+
+    await userEvent.type(search, 'TOM')
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Tomato (Vegetables)'])
+
+    await userEvent.clear(search)
+    await userEvent.type(search, 'dry')
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Pasta (Dry goods)'])
+
+    await userEvent.clear(search)
+    await userEvent.type(search, 'xyz')
+    expect(screen.queryByRole('option')).not.toBeInTheDocument()
+    expect(screen.getByText('No ingredients match.')).toBeInTheDocument()
+  })
+
+  it('ignores accents on either side of the search', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        stubApi({
+          '/api/ingredients': [
+            { id: 'i1', name: 'Łosoś', category: 'Ryby' },
+            { id: 'i2', name: 'Pomidor', category: 'Warzywa' },
+            { id: 'i3', name: 'Crème fraîche', category: 'Nabiał' },
+          ],
+        }),
+      ),
+    )
+
+    renderPage(<RecipeEditorPage />, '/recipes/new')
+    const search = await screen.findByRole('combobox', { name: 'Add ingredient' })
+    await userEvent.click(search)
+    await screen.findAllByRole('option')
+
+    const shownFor = async (text: string) => {
+      await userEvent.clear(search)
+      await userEvent.type(search, text)
+      return screen.queryAllByRole('option').map((o) => o.textContent)
+    }
+
+    expect(await shownFor('losos')).toEqual(['Łosoś (Ryby)'])
+    expect(await shownFor('ŁOSOŚ')).toEqual(['Łosoś (Ryby)'])
+    expect(await shownFor('pomidór')).toEqual(['Pomidor (Warzywa)'])
+    expect(await shownFor('creme')).toEqual(['Crème fraîche (Nabiał)'])
+    expect(await shownFor('nabial')).toEqual(['Crème fraîche (Nabiał)'])
+    expect(await shownFor('losus')).toEqual([])
+  })
+
+  it('adds a clicked ingredient and stops offering it', async () => {
+    renderPage(<RecipeEditorPage />, '/recipes/new')
+    const search = await screen.findByRole('combobox', { name: 'Add ingredient' })
+    await userEvent.click(search)
+    await userEvent.click(await screen.findByRole('option', { name: 'Pasta (Dry goods)' }))
+
+    expect(screen.getByRole('button', { name: 'Remove Pasta' })).toBeInTheDocument()
+    expect(search).toHaveValue('')
+
+    // Scoped to the list: the new row's unit select has options of its own.
+    await userEvent.click(search)
+    expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Tomato (Vegetables)',
+    ])
+  })
+
+  it('picks an ingredient with the keyboard', async () => {
+    renderPage(<RecipeEditorPage />, '/recipes/new')
+    const search = await screen.findByRole('combobox', { name: 'Add ingredient' })
+    await userEvent.click(search)
+    await screen.findByRole('option', { name: 'Tomato (Vegetables)' })
+
+    // Tomato is highlighted first, so one step down lands on Pasta.
+    await userEvent.keyboard('{ArrowDown}{Enter}')
+
+    expect(screen.getByRole('button', { name: 'Remove Pasta' })).toBeInTheDocument()
+
+    await userEvent.type(search, 'tom{Enter}')
+
+    expect(screen.getByRole('button', { name: 'Remove Tomato' })).toBeInTheDocument()
   })
 
   it('saves a recipe whose only step was left blank with no steps', async () => {
@@ -130,8 +216,7 @@ describe('RecipeEditorPage', () => {
     vi.stubGlobal('fetch', fetchStub)
 
     renderPage(<RecipeEditorPage />, '/recipes/new')
-    await screen.findByRole('option', { name: 'Tomato (Vegetables)' })
-    await userEvent.click(screen.getByRole('button', { name: 'Save recipe' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Save recipe' }))
 
     const post = await vi.waitFor(() => {
       const call = fetchStub.mock.calls.find(([, init]) => init?.method === 'POST')
@@ -159,9 +244,8 @@ describe('RecipeEditorPage', () => {
     )
 
     renderPage(<RecipeEditorPage />, '/recipes/new')
-    await screen.findByRole('option', { name: 'Tomato (Vegetables)' })
 
-    await userEvent.type(screen.getByLabelText('Step 1'), 'Chop.')
+    await userEvent.type(await screen.findByLabelText('Step 1'), 'Chop.')
     await userEvent.click(screen.getByRole('button', { name: 'New ingredient' }))
     await userEvent.type(screen.getByLabelText('New ingredient name'), 'Basil')
     await userEvent.type(screen.getByLabelText('New ingredient category'), 'Herbs')

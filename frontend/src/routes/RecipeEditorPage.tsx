@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import type { KeyboardEvent } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useAddIngredient, useIngredients } from '../api/ingredients'
 import { useRecipe, useSaveRecipe } from '../api/recipes'
@@ -60,6 +61,125 @@ const toRequest = (draft: Draft): RecipeRequest => ({
     .map((tag) => tag.trim())
     .filter((tag) => tag !== ''),
 })
+
+// Letters with a stroke rather than an accent, which NFD leaves in one piece.
+const undecomposed: Record<string, string> = { ł: 'l', ø: 'o', đ: 'd', ħ: 'h', ß: 'ss', æ: 'ae', œ: 'oe' }
+
+/** Lower case with accents gone, so "losos" and "ŁOSOŚ" both find "Łosoś". */
+const fold = (text: string) =>
+  text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[łøđħßæœ]/g, (letter) => undecomposed[letter])
+
+const matches = (ingredient: Ingredient, search: string) =>
+  fold(`${ingredient.name} ${ingredient.category}`).includes(fold(search.trim()))
+
+function IngredientSearch({
+  ingredients,
+  onPick,
+}: {
+  ingredients: Ingredient[]
+  onPick: (ingredient: Ingredient) => void
+}) {
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const [active, setActive] = useState(0)
+  const listId = useId()
+  const list = useRef<HTMLUListElement>(null)
+
+  const found = ingredients.filter((ingredient) => matches(ingredient, search))
+
+  useEffect(() => {
+    list.current?.children[active]?.scrollIntoView({ block: 'nearest' })
+  }, [active])
+
+  const pick = (ingredient: Ingredient) => {
+    onPick(ingredient)
+    setSearch('')
+    setActive(0)
+    setOpen(false)
+  }
+
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      setOpen(false)
+    } else if (e.key === 'Enter') {
+      if (open && found[active] !== undefined) {
+        pick(found[active])
+      }
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+
+      if (!open) {
+        setOpen(true)
+      } else if (found.length > 0) {
+        setActive((active + (e.key === 'ArrowDown' ? 1 : -1) + found.length) % found.length)
+      }
+    }
+  }
+
+  return (
+    <div className="relative">
+      <Input
+        role="combobox"
+        value={search}
+        placeholder="Search ingredients to add…"
+        aria-label="Add ingredient"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={open && found.length > 0 ? `${listId}-${active}` : undefined}
+        autoComplete="off"
+        onChange={(e) => {
+          setSearch(e.target.value)
+          setActive(0)
+          setOpen(true)
+        }}
+        onClick={() => setOpen(true)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onKeyDown={onKeyDown}
+      />
+
+      {open && found.length === 0 && (
+        <p className="absolute z-10 mt-1 w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-ink-soft shadow-md">
+          {search.trim() === '' ? 'No more ingredients to add.' : 'No ingredients match.'}
+        </p>
+      )}
+
+      <ul
+        ref={list}
+        id={listId}
+        role="listbox"
+        aria-label="Ingredients"
+        hidden={!open || found.length === 0}
+        className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-line bg-surface py-1 shadow-md"
+      >
+        {open &&
+          found.map((ingredient, index) => (
+            <li
+              key={ingredient.id}
+              id={`${listId}-${index}`}
+              role="option"
+              aria-selected={index === active}
+              className={cx('cursor-pointer px-2.5 py-1.5 text-sm', index === active && 'bg-surface-sunken')}
+              onMouseEnter={() => setActive(index)}
+              // On mouse down, not click: keeps focus in the input, whose blur
+              // would otherwise close the list before the click lands.
+              onMouseDown={(e) => {
+                e.preventDefault()
+                pick(ingredient)
+              }}
+            >
+              {ingredient.name} <span className="text-xs text-ink-soft">({ingredient.category})</span>
+            </li>
+          ))}
+      </ul>
+    </div>
+  )
+}
 
 function NewIngredientForm({
   onAdded,
@@ -230,18 +350,7 @@ export default function RecipeEditorPage() {
           )
         })}
 
-        <Select
-          value=""
-          aria-label="Add ingredient"
-          onChange={(e) => e.target.value !== '' && addRow(e.target.value)}
-        >
-          <option value="">Add an ingredient…</option>
-          {unused.map((ingredient) => (
-            <option key={ingredient.id} value={ingredient.id}>
-              {ingredient.name} ({ingredient.category})
-            </option>
-          ))}
-        </Select>
+        <IngredientSearch ingredients={unused} onPick={(ingredient) => addRow(ingredient.id)} />
 
         {creatingIngredient ? (
           <NewIngredientForm
